@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7fa;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #333;
+            text-align: center;
+        }
+        .nav-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .nav-buttons button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .nav-buttons button:hover {
+            background-color: #0056b3;
+        }
+        table {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto 32px;
+            border-collapse: collapse;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+        tr.low-risk {
+            background-color: #90ee90;
+        }
+        tr.medium-risk {
+            background-color: #ffff99;
+        }
+        tr.high-risk {
+            background-color: #ffcccc;
+        }
+        .top5-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .top5-card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            text-align: center;
+            min-width: 200px;
+            max-width: 300px;
+        }
+        .top5-card .name {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #c0392b;
+        }
+        .top5-card .rpn {
+            font-size: 1.4em;
+            color: #2a4d69;
+            margin: 8px 0;
+        }
+        .top5-card .details {
+            font-size: 1em;
+            color: #555;
+        }
+        .chart-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 32px;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+        .chart-container {
+            flex: 1;
+            min-width: 320px;
+            max-width: 480px;
+            background: #fff;
+            padding: 24px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .additional-charts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 32px;
+            justify-content: center;
+        }
+        .no-high-risk {
+            text-align: center;
+            color: #555;
+            font-size: 16px;
+            margin-bottom: 32px;
+        }
+    </style>
+</head>
+<body>
+    <h1>FMEA Dashboard</h1>
+    <div class="nav-buttons">
+        <a href="/home"><button>Back Home</button></a>
+        <a href="/form"><button>Data Entry Form</button></a>
+        <a href="/reports"><button>Reports</button></a>
+    </div>
+    <h2>Failure Modes Table</h2>
+    <table>
+        <tr>
+            <th>Step</th>
+            <th>Failure Mode</th>
+            <th>Cause</th>
+            <th>Control</th>
+            <th>Effect</th>
+            <th>S</th>
+            <th>O</th>
+            <th>D</th>
+            <th>RPN</th>
+        </tr>
+        {% for mode in data %}
+        <tr class="{% if mode['RPN'] <= 30 %}low-risk{% elif mode['RPN'] <= 60 %}medium-risk{% else %}high-risk{% endif %}">
+            <td>{{ mode['Step'] }}</td>
+            <td>{{ mode['Failure Mode'] }}</td>
+            <td>{{ mode['Cause'] }}</td>
+            <td>{{ mode['Control'] }}</td>
+            <td>{{ mode['Effect'] }}</td>
+            <td>{{ mode['S'] }}</td>
+            <td>{{ mode['O'] }}</td>
+            <td>{{ mode['D'] }}</td>
+            <td>{{ mode['RPN'] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <!-- Top 5 Risks Section, shown only if top_5 has entries 
+    {% if top_5 %}
+    <h2>Top 5 High-Risk Failures (RPN > 60)</h2>
+    <div class="top5-container">
+        {% for mode in top_5 %}
+        <div class="top5-card">
+            <div class="name">{{ mode['Failure Mode'] }}</div>
+            <div class="rpn">RPN: {{ mode['RPN'] }}</div>
+            <div class="details">S: {{ mode['S'] }} | O: {{ mode['O'] }} | D: {{ mode['D'] }}</div>
+        </div>
+        {% endfor %}-->
+    </div>
+    <div class="chart-row">
+        <div class="chart-container">
+            <h3>Top 5 RPN Chart (RPN > 60)</h3>
+            <canvas id="top5Chart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3>Risk Distribution Chart</h3>
+            <canvas id="riskChart"></canvas>
+        </div>
+    </div>
+    {% else %}
+    <p class="no-high-risk">No high-risk failures (RPN > 60) found.</p>
+    {% endif %}
+    <div class="additional-charts">
+        <div class="chart-container">
+            <h3>Average Scores</h3>
+            <canvas id="avgScoresChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3>Severity Distribution</h3>
+            <canvas id="severityChart"></canvas>
+        </div>
+    </div>
+    <script>
+        // Prepare data for charts
+        const top5Labels = {{ top_5 | map(attribute='Failure Mode') | list | tojson | safe }};
+        const top5LabelsShort = top5Labels.map(l => (typeof l === 'string' && l.length > 20) ? l.slice(0, 17) + '...' : l);
+        const top5Data = {{ top_5 | map(attribute='RPN') | list | tojson | safe }};
+
+        // Only render Top 5 chart if top_5 has data
+        if (top5Labels.length > 0) {
+            const top5Ctx = document.getElementById('top5Chart').getContext('2d');
+            new Chart(top5Ctx, {
+                type: 'bar',
+                data: {
+                    labels: top5LabelsShort,
+                    datasets: [{
+                        label: 'Top 5 RPN (RPN > 60)',
+                        data: top5Data,
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, title: { display: true, text: 'RPN' } } }
+                }
+            });
+        }
+
+        const riskDist = {{ risk_dist | tojson | safe }};
+        const riskCtx = document.getElementById('riskChart').getContext('2d');
+        new Chart(riskCtx, {
+            type: 'pie',
+            data: {
+                labels: ['Low (0-30)', 'Medium (31-60)', 'High (>60)'],
+                datasets: [{
+                    data: [riskDist['Low (0-30)'] || 0, riskDist['Medium (31-60)'] || 0, riskDist['High (>60)'] || 0],
+                    backgroundColor: ['#90ee90', '#ffff99', '#ffcccc']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+
+        // Additional Charts
+        const avgScores = {{ avg_scores | tojson | safe }};
+        const avgCtx = document.getElementById('avgScoresChart').getContext('2d');
+        new Chart(avgCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Severity', 'Occurrence', 'Detection'],
+                datasets: [{
+                    label: 'Average Scores',
+                    data: [avgScores.severity, avgScores.occurrence, avgScores.detection],
+                    backgroundColor: ['#ff6384', '#36a2eb', '#ffce56']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, max: 10 } }
+            }
+        });
+
+        const severityDist = {{ severity_dist | tojson | safe }};
+        const severityCtx = document.getElementById('severityChart').getContext('2d');
+        new Chart(severityCtx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(severityDist),
+                datasets: [{
+                    data: Object.values(severityDist),
+                    backgroundColor: ['#ff6384', '#ff9f40', '#ffcd56', '#4bc0c0', '#36a2eb', '#9966ff', '#c9cbcf', '#e7e9ed', '#f7464a', '#949fb1']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    </script>
+</body>
+</html>

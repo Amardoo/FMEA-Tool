@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Reports</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.16/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7fa;
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #333;
+            text-align: center;
+        }
+        .nav-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .nav-buttons button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .nav-buttons button:hover {
+            background-color: #0056b3;
+        }
+        .export-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .export-buttons button {
+            padding: 12px 24px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .export-buttons button:hover {
+            background-color: #218838;
+        }
+        table {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto 32px;
+            border-collapse: collapse;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+        .stats {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 24px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .stats p {
+            font-size: 16px;
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>FMEA Reports</h1>
+    <div class="nav-buttons">
+        <a href="/home"><button>Back Home</button></a>
+        <a href="/form"><button>Data Entry Form</button></a>
+        <a href="/dashboard"><button>Dashboard</button></a>
+    </div>
+    <div class="export-buttons">
+        <button onclick="exportToPDF()">Export to PDF</button>
+        <button onclick="exportToCSV()">Export to Excel (CSV)</button>
+    </div>
+    <h2>Failure Modes Table</h2>
+    <table>
+        <tr>
+            <th>Step</th>
+            <th>Failure Mode</th>
+            <th>Cause</th>
+            <th>Control</th>
+            <th>Effect</th>
+            <th>S</th>
+            <th>O</th>
+            <th>D</th>
+            <th>RPN</th>
+        </tr>
+        {% for mode in data %}
+        <tr>
+            <td>{{ mode['Step'] }}</td>
+            <td>{{ mode['Failure Mode'] }}</td>
+            <td>{{ mode['Cause'] }}</td>
+            <td>{{ mode['Control'] }}</td>
+            <td>{{ mode['Effect'] }}</td>
+            <td>{{ mode['S'] }}</td>
+            <td>{{ mode['O'] }}</td>
+            <td>{{ mode['D'] }}</td>
+            <td>{{ mode['RPN'] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <h2>Statistical Summary</h2>
+    <div class="stats">
+        <p>Average RPN: {{ stats['average'] }}</p>
+        <p>Maximum RPN: {{ stats['max'] }}</p>
+        <p>Minimum RPN: {{ stats['min'] }}</p>
+        <p>Number of High Risks (>60): {{ stats['high_risk'] }}</p>
+    </div>
+    <script>
+        // Create a JSON-safe representation of the data for JS
+        const data = {{ data | tojson }} || [];
+
+        // Normalize fields
+        // Normalize fields
+        const normalizedData = data.map(item => ({
+            step: item['Step'] || '',
+            name: item['Failure Mode'] || '',
+            cause: item['Cause'] || '',
+            control: item['Control'] || '',
+            effect: item['Effect'] || '',
+            s: item['S'] ?? 0,
+            o: item['O'] ?? 0,
+            d: item['D'] ?? 0,
+            rpn: item['RPN'] ?? 0
+        }));
+
+        function exportToCSV() {
+            let csv = 'Step,Failure Mode,Cause,Control,Effect,S,O,D,RPN\n';
+            normalizedData.forEach(row => {
+                csv += `${row.step},${row.name},${row.cause},${row.control},${row.effect},${row.s},${row.o},${row.d},${row.rpn}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'fmea_report.csv';
+            a.click();
+        }
+
+        function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+            doc.setFontSize(18);
+            doc.text('FMEA Report', 148, 20, { align: 'center' });
+
+            const headers = [['Step', 'Failure Mode', 'Cause', 'Control', 'Effect', 'S', 'O', 'D', 'RPN']];
+            const body = normalizedData.map(row => [
+                row.step,
+                row.name,
+                row.cause,
+                row.control,
+                row.effect,
+                row.s,
+                row.o,
+                row.d,
+                row.rpn
+            ]);
+
+            doc.autoTable({
+                startY: 30,
+                head: headers,
+                body: body,
+                theme: 'grid',
+                styles: { fontSize: 10, cellPadding: 2, overflow: 'linebreak' },
+                headStyles: { fillColor: [0, 123, 255], textColor: 255, fontStyle: 'bold' },
+                columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 40 }, 2: { cellWidth: 40 }, 3: { cellWidth: 40 }, 4: { cellWidth: 40 }, 5: { cellWidth: 10 }, 6: { cellWidth: 10 }, 7: { cellWidth: 10 }, 8: { cellWidth: 15 } }
+            });
+
+            doc.save('fmea_report.pdf');
+        }
+    </script>
+</body>
+</html>
+
+
